@@ -51,6 +51,30 @@ class VideoManager {
     private open(): void {
         this.videoPlayerCtrl.classList.remove('hidden', 'loading');
         this.opened = videoStates.playing;
+        this.adjustvideoheight();
+    }
+
+    private adjustvideoheight(): void {
+        var that = this
+        console.log(that.videoPlayerElem)
+        console.log(that.videoPlayerElem.videoHeight)
+        setTimeout(function(){ 
+            //console.log(that.videoPlayerElem)
+            //console.log(that.videoPlayerElem.videoHeight)
+            if(!that.videoPlayerElem.videoHeight) {
+                that.videoPlayerElem.style.height = "40px";
+            } 
+            //else {
+            //    that.videoPlayerElem.style.removeProperty("height");
+            //}     
+        }, 1000);
+
+        /*setInterval(function(){ 
+            console.log("audio", that.videoPlayerElem.webkitAudioDecodedByteCount)
+            console.log("video", that.videoPlayerElem.webkitVideoDecodedByteCount)
+             
+        }, 1000);*/
+        
     }
 
     private changeVolume(talking = false): void {
@@ -91,12 +115,15 @@ class VideoManager {
         this.videoPlayerDiv.append(this.videoPlayerElem);
         this.changeVolume();
         this.videoPlayerElem.play();
+      
 
         // @TODO: The videoPlayerElem variable is needed because of `this` being overridden in event handler.
         const videoPlayerElem = this.videoPlayerElem;
         videoPlayerElem.onplay = (e)=> {
             this.jumpToEnd(videoPlayerElem);
         }
+
+        
 
         const decreaseElem = HtmlUtils.getElementByIdOrFail<HTMLInputElement>('videoplayer_decrease_while_talking');
         decreaseElem.oninput = (ev: Event)=> {
