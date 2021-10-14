@@ -55,13 +55,13 @@ class VideoManager {
     }
 
     private adjustvideoheight(): void {
-        var that = this
+        let that = this
         console.log(that.videoPlayerElem)
         console.log(that.videoPlayerElem.videoHeight)
         setTimeout(function(){ 
             //console.log(that.videoPlayerElem)
             //console.log(that.videoPlayerElem.videoHeight)
-            if(!that.videoPlayerElem.videoHeight) {
+            if(typeof(that.videoPlayerElem.videoHeight) != 'undefined' && !that.videoPlayerElem.videoHeight) {
                 that.videoPlayerElem.style.height = "40px";
             } 
             //else {
