@@ -1,14 +1,16 @@
 <script lang="typescript">
     import { localUserStore } from "../../Connexion/LocalUserStore";
-    import { videoConstraintStore } from "../../Stores/MediaStore";
+    import { isSilentStore, videoConstraintStore } from "../../Stores/MediaStore";
     import { HtmlUtils } from "../../WebRtc/HtmlUtils";
     import { isMobile } from "../../Enum/EnvironmentVariable";
     import { menuVisiblilityStore } from "../../Stores/MenuStore";
+    import { gameManager } from "../../Phaser/Game/GameManager";
 
     let fullscreen: boolean = localUserStore.getFullscreen();
     let notification: boolean = localUserStore.getNotification() === "granted";
     let forceCowebsiteTrigger: boolean = localUserStore.getForceCowebsiteTrigger();
     let ignoreFollowRequests: boolean = localUserStore.getIgnoreFollowRequests();
+    let alwaysSilent: boolean = localUserStore.getAlwaysSilent();
     let valueGame: number = localUserStore.getGameQualityValue();
     let valueVideo: number = localUserStore.getVideoQualityValue();
     let previewValueGame = valueGame;
@@ -62,6 +64,17 @@
 
     function changeIgnoreFollowRequests() {
         localUserStore.setIgnoreFollowRequests(ignoreFollowRequests);
+    }
+
+    function changeAlwaysSilent() {
+        localUserStore.setAlwaysSilent(alwaysSilent);
+        const scene = gameManager.getCurrentGameScene();
+        const silentZone = scene.isSilentZone();
+        const silent = alwaysSilent || silentZone;
+        scene.connection?.setSilent(silent);
+        // We need to make sure this flag toggles at least once to update UI
+        isSilentStore.set(!silent);
+        isSilentStore.set(silent);
     }
 
     function closeMenu() {
@@ -136,6 +149,15 @@
                 on:change={changeIgnoreFollowRequests}
             />
             <span>Ignore requests to follow other users</span>
+        </label>
+        <label>
+            <input
+                type="checkbox"
+                class="nes-checkbox is-dark"
+                bind:checked={alwaysSilent}
+                on:change={changeAlwaysSilent}
+            />
+            <span>Silent mode (disable proximity chat)</span>
         </label>
     </section>
 </div>
