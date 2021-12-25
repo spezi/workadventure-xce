@@ -1,15 +1,12 @@
 <script lang="typescript">
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { SelectCompanionScene, SelectCompanionSceneName } from "../../Phaser/Login/SelectCompanionScene";
-    import { menuIconVisiblilityStore, menuVisiblilityStore, userIsConnected } from "../../Stores/MenuStore";
+    import { menuIconVisiblilityStore, menuVisiblilityStore } from "../../Stores/MenuStore";
     import { selectCompanionSceneVisibleStore } from "../../Stores/SelectCompanionStore";
     import { LoginScene, LoginSceneName } from "../../Phaser/Login/LoginScene";
     import { loginSceneVisibleStore } from "../../Stores/LoginSceneStore";
     import { selectCharacterSceneVisibleStore } from "../../Stores/SelectCharacterStore";
     import { SelectCharacterScene, SelectCharacterSceneName } from "../../Phaser/Login/SelectCharacterScene";
-    import { connectionManager } from "../../Connexion/ConnectionManager";
-    import { PROFILE_URL } from "../../Enum/EnvironmentVariable";
-    import { localUserStore } from "../../Connexion/LocalUserStore";
     import { EnableCameraScene, EnableCameraSceneName } from "../../Phaser/Login/EnableCameraScene";
     import { enableCameraSceneVisibilityStore } from "../../Stores/MediaStore";
     import btnProfileSubMenuCamera from "../images/btn-menu-profile-camera.svg";
@@ -41,16 +38,6 @@
         gameManager.leaveGame(SelectCharacterSceneName, new SelectCharacterScene());
     }
 
-    function logOut() {
-        disableMenuStores();
-        loginSceneVisibleStore.set(true);
-        connectionManager.logout();
-    }
-
-    function getProfileUrl() {
-        return PROFILE_URL + `?token=${localUserStore.getAuthToken()}`;
-    }
-
     function openEnableCameraScene() {
         disableMenuStores();
         enableCameraSceneVisibilityStore.showEnableCameraScene();
@@ -67,35 +54,20 @@
             </button>
             <button type="button" class="nes-btn" on:click|preventDefault={openEditSkinScene}>
                 <Woka userId={-1} placeholderSrc="" width="26px" height="26px" />
-                <span class="btn-hover">Edit your WOKA</span>
+                <span class="btn-text">Change your Avatar</span>
             </button>
             <button type="button" class="nes-btn" on:click|preventDefault={openEditCompanionScene}>
                 <Companion userId={-1} placeholderSrc={btnProfileSubMenuCompanion} width="26px" height="26px" />
-                <span class="btn-hover">Edit your companion</span>
+                <span class="btn-text">Change your companion</span>
             </button>
             <button type="button" class="nes-btn" on:click|preventDefault={openEnableCameraScene}>
-                <img src={btnProfileSubMenuCamera} alt="Edit your camera" />
-                <span class="btn-hover">Edit your camera</span>
+                <img src={btnProfileSubMenuCamera} alt="change your camera or mic" />
+                <span class="btn-text">Change your camera or microphone</span>
             </button>
         </section>
     </div>
 
-    <div class="content">
-        {#if $userIsConnected}
-            <section>
-                {#if PROFILE_URL != undefined}
-                    <iframe title="profile" src={getProfileUrl()} />
-                {/if}
-            </section>
-            <section>
-                <button type="button" class="nes-btn" on:click|preventDefault={logOut}>Log out</button>
-            </section>
-        {:else}
-            <section>
-                <a type="button" class="nes-btn" href="/login">Sign in</a>
-            </section>
-        {/if}
-    </div>
+    <div class="content" />
 </div>
 
 <style lang="scss">
@@ -120,17 +92,8 @@
                     cursor: pointer;
                 }
 
-                span.btn-hover {
-                    display: none;
+                span.btn-text {
                     font-family: "Press Start 2P";
-                }
-
-                &:hover {
-                    width: auto;
-
-                    span.btn-hover {
-                        display: initial;
-                    }
                 }
             }
         }
@@ -143,12 +106,6 @@
                 align-items: center;
                 flex-wrap: wrap;
                 margin-bottom: 20px;
-
-                iframe {
-                    width: 100%;
-                    height: 50vh;
-                    border: none;
-                }
 
                 button {
                     height: 50px;
