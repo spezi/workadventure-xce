@@ -2,7 +2,6 @@ import { HtmlUtils } from "./HtmlUtils";
 import { Subject } from "rxjs";
 import { iframeListener } from "../Api/IframeListener";
 import { waScaleManager } from "../Phaser/Services/WaScaleManager";
-import { ICON_URL } from "../Enum/EnvironmentVariable";
 
 enum iframeStates {
     closed = 1,
@@ -462,14 +461,6 @@ class CoWebsiteManager {
         const icon = document.createElement("div");
         icon.id = "cowebsite-icon-" + iframe.id;
         icon.style.display = "none";
-
-        const iconImage = document.createElement("img");
-        iconImage.src = `${ICON_URL}/icon?url=${iframe.src}&size=16..30..256`;
-        const url = new URL(iframe.src);
-        iconImage.alt = url.hostname;
-
-        icon.appendChild(iconImage);
-
         return icon;
     }
 
