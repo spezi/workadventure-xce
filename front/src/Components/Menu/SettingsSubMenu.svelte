@@ -15,8 +15,10 @@
     let disableAnimations: boolean = localUserStore.getDisableAnimations();
     let gameQuality: number = localUserStore.getGameQualityValue();
     let videoQuality: number = localUserStore.getVideoQualityValue();
+    let blockExternalContent: boolean = localUserStore.getBlockExternalContent();
     let previousGameQuality = gameQuality;
     let previousVideoQuality = videoQuality;
+    let oldBlockExternalContent = blockExternalContent;
 
     function saveSettings() {
         let reload = false;
@@ -33,6 +35,10 @@
             reload = true;
         }
 
+        if (blockExternalContent !== oldBlockExternalContent) {
+            oldBlockExternalContent = blockExternalContent;
+            localUserStore.setBlockExternalContent(blockExternalContent);
+            reload = true;
         }
 
         if (reload) {
@@ -128,6 +134,12 @@
                 <option value={5}>{isMobile() ? "Small (5 fps)" : "Small video quality (5 fps)"}</option>
             </select>
         </div>
+    </section>
+    <section>
+        <label>
+            <input type="checkbox" class="nes-checkbox is-dark" bind:checked={blockExternalContent} />
+            <span>Block external content (tabs, split-screens and embedded websites such as video streams)</span>
+        </label>
     </section>
     <section class="settings-section-save">
         <p>Note: Changing these settings will restart the game.</p>

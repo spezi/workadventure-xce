@@ -29,6 +29,9 @@ export class GameMapPropertiesListener {
 
     register() {
         this.gameMap.onPropertyChange(GameMapProperties.OPEN_TAB, (newValue, oldValue, allProps) => {
+            if (localUserStore.getBlockExternalContent()) {
+                return;
+            }
             if (newValue === undefined) {
                 layoutManagerActionStore.removeAction("openTab");
             }
@@ -57,7 +60,7 @@ export class GameMapPropertiesListener {
         this.gameMap.onEnterLayer((newLayers) => {
             const handler = () => {
                 newLayers.forEach((layer) => {
-                    if (!layer.properties) {
+                    if (!layer.properties || localUserStore.getBlockExternalContent()) {
                         return;
                     }
 
