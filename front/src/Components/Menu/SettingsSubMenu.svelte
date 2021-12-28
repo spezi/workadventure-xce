@@ -4,7 +4,6 @@
     import { audioManagerFileStore, audioManagerVisibilityStore } from "../../Stores/AudioManagerStore";
     import { HtmlUtils } from "../../WebRtc/HtmlUtils";
     import { isMobile } from "../../Enum/EnvironmentVariable";
-    import { menuVisiblilityStore } from "../../Stores/MenuStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
 
     let fullscreen: boolean = localUserStore.getFullscreen();
@@ -14,24 +13,31 @@
     let ignoreFollowRequests: boolean = localUserStore.getIgnoreFollowRequests();
     let alwaysSilent: boolean = localUserStore.getAlwaysSilent();
     let disableAnimations: boolean = localUserStore.getDisableAnimations();
-    let valueGame: number = localUserStore.getGameQualityValue();
-    let valueVideo: number = localUserStore.getVideoQualityValue();
-    let previewValueGame = valueGame;
-    let previewValueVideo = valueVideo;
+    let gameQuality: number = localUserStore.getGameQualityValue();
+    let videoQuality: number = localUserStore.getVideoQualityValue();
+    let previousGameQuality = gameQuality;
+    let previousVideoQuality = videoQuality;
 
-    function saveSetting() {
-        if (valueGame !== previewValueGame) {
-            previewValueGame = valueGame;
-            localUserStore.setGameQualityValue(valueGame);
+    function saveSettings() {
+        let reload = false;
+
+        if (gameQuality !== previousGameQuality) {
+            previousGameQuality = gameQuality;
+            localUserStore.setGameQualityValue(gameQuality);
+            reload = true;
+        }
+
+        if (videoQuality !== previousVideoQuality) {
+            previousVideoQuality = videoQuality;
+            videoConstraintStore.setFrameRate(videoQuality);
+            reload = true;
+        }
+
+        }
+
+        if (reload) {
             window.location.reload();
         }
-
-        if (valueVideo !== previewValueVideo) {
-            previewValueVideo = valueVideo;
-            videoConstraintStore.setFrameRate(valueVideo);
-        }
-
-        closeMenu();
     }
 
     function changeFullscreen() {
@@ -96,30 +102,24 @@
             gameManager.getCurrentGameScene().animatedTiles.resume();
         }
     }
-
-    function closeMenu() {
-        menuVisiblilityStore.set(false);
-    }
 </script>
 
-<div class="settings-main" on:submit|preventDefault={saveSetting}>
+<div class="settings-main" on:submit|preventDefault={saveSettings}>
     <section>
         <h3>Game quality</h3>
         <div class="nes-select is-dark">
-            <select bind:value={valueGame}>
-                <option value={120}>{isMobile() ? "High (120 fps)" : "High video quality (120 fps)"}</option>
-                <option value={60}
-                    >{isMobile() ? "Medium (60 fps)" : "Medium video quality (60 fps, recommended)"}</option
-                >
-                <option value={40}>{isMobile() ? "Minimum (40 fps)" : "Minimum video quality (40 fps)"}</option>
-                <option value={20}>{isMobile() ? "Small (20 fps)" : "Small video quality (20 fps)"}</option>
+            <select bind:value={gameQuality}>
+                <option value={120}>{isMobile() ? "High (120 fps)" : "High quality (120 fps)"}</option>
+                <option value={60}>{isMobile() ? "Medium (60 fps)" : "Medium quality (60 fps, recommended)"}</option>
+                <option value={40}>{isMobile() ? "Minimum (40 fps)" : "Minimum quality (40 fps)"}</option>
+                <option value={20}>{isMobile() ? "Small (20 fps)" : "Small quality (20 fps)"}</option>
             </select>
         </div>
     </section>
     <section>
         <h3>Video quality</h3>
         <div class="nes-select is-dark">
-            <select bind:value={valueVideo}>
+            <select bind:value={videoQuality}>
                 <option value={30}>{isMobile() ? "High (30 fps)" : "High video quality (30 fps)"}</option>
                 <option value={20}
                     >{isMobile() ? "Medium (20 fps)" : "Medium video quality (20 fps, recommended)"}</option
@@ -130,8 +130,8 @@
         </div>
     </section>
     <section class="settings-section-save">
-        <p>(Saving these settings will restart the game)</p>
-        <button type="button" class="nes-btn is-primary" on:click|preventDefault={saveSetting}>Save</button>
+        <p>Note: Changing these settings will restart the game.</p>
+        <button type="button" class="nes-btn is-primary" on:click|preventDefault={saveSettings}>Save</button>
     </section>
     <section class="settings-section-noSaveOption">
         <label>
