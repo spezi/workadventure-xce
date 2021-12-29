@@ -1,6 +1,7 @@
 <script lang="typescript">
     import { requestedScreenSharingState, screenSharingAvailableStore } from "../Stores/ScreenSharingStore";
     import { isSilentStore, requestedCameraState, requestedMicrophoneState } from "../Stores/MediaStore";
+    import { localUserStore } from "../Connexion/LocalUserStore";
     import monitorImg from "./images/monitor.svg";
     import monitorCloseImg from "./images/monitor-close.svg";
     import cinemaImg from "./images/cinema.svg";
@@ -14,6 +15,8 @@
     import { peerStore } from "../Stores/PeerStore";
     import { onDestroy } from "svelte";
 
+    let camInstructionsVisible = false;
+
     function screenSharingClick(): void {
         if (isSilent) return;
         if ($requestedScreenSharingState === true) {
@@ -25,6 +28,10 @@
 
     function cameraClick(): void {
         if (isSilent) return;
+        if (localUserStore.getNoVideo()) {
+            camInstructionsVisible = true;
+            return;
+        }
         if ($requestedCameraState === true) {
             requestedCameraState.disableWebcam();
         } else {
@@ -49,6 +56,12 @@
         }
     }
 
+    function unblockCamera() {
+        localUserStore.setNoVideo(false);
+        requestedCameraState.enableWebcam();
+        camInstructionsVisible = false;
+    }
+
     let isSilent: boolean;
     const unsubscribeIsSilent = isSilentStore.subscribe((value) => {
         isSilent = value;
@@ -57,6 +70,19 @@
 </script>
 
 <div>
+    <div class="interact-menu nes-container is-rounded" hidden={!camInstructionsVisible}>
+        <section class="interact-menu-question">
+            <p>You have disabled your camera in game settings. Do you want to override this and enable your camera?</p>
+        </section>
+        <section class="interact-menu-action">
+            <button type="button" class="nes-btn is-success" on:click|preventDefault={unblockCamera}>Yes</button>
+            <button
+                type="button"
+                class="nes-btn is-error"
+                on:click|preventDefault={() => (camInstructionsVisible = false)}>No</button
+            >
+        </section>
+    </div>
     <div class="btn-cam-action">
         <div class="btn-layout" on:click={switchLayoutMode} class:hide={$peerStore.size === 0}>
             {#if $layoutModeStore === LayoutMode.Presentation}
@@ -93,3 +119,37 @@
         </div>
     </div>
 </div>
+
+<style lang="scss">
+    div.interact-menu {
+        pointer-events: auto;
+        user-select: none;
+        background-color: #333333;
+        color: whitesmoke;
+
+        position: absolute;
+        left: 20vw;
+        width: 60vw;
+        top: 60vh;
+        margin: auto;
+
+        section.interact-menu-question {
+            margin: 4px;
+            margin-bottom: 20px;
+
+            p {
+                font-size: 1.05em;
+                font-weight: bold;
+            }
+        }
+
+        section.interact-menu-action {
+            display: grid;
+            grid-gap: 10%;
+            grid-template-columns: 45% 45%;
+            margin-bottom: 20px;
+            margin-left: 5%;
+            margin-right: 5%;
+        }
+    }
+</style>
