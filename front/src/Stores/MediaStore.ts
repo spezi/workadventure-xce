@@ -177,6 +177,11 @@ function createVideoConstraintStore() {
     };
 }
 
+/**
+ * A store containing if user is silent, so if he is in silent zone. This permit to show et hide camera of user
+ */
+export const isSilentStore = writable(false);
+
 export const videoConstraintStore = createVideoConstraintStore();
 
 /**
@@ -234,6 +239,7 @@ export const mediaStreamConstraintsStore = derived(
         audioConstraintStore,
         privacyShutdownStore,
         cameraEnergySavingStore,
+        isSilentStore,
     ],
     (
         [
@@ -245,6 +251,7 @@ export const mediaStreamConstraintsStore = derived(
             $audioConstraintStore,
             $privacyShutdownStore,
             $cameraEnergySavingStore,
+            $isSilentStore,
         ],
         set
     ) => {
@@ -292,6 +299,11 @@ export const mediaStreamConstraintsStore = derived(
             //this optimization is desactivated because of sound issues on chrome
             //todo: fix this conflicts and reactivate this optimization
             //currentAudioConstraint = false;
+        }
+
+        if ($isSilentStore === true) {
+            currentVideoConstraint = false;
+            currentAudioConstraint = false;
         }
 
         // Let's make the changes only if the new value is different from the old one.
@@ -353,7 +365,9 @@ function applyCameraConstraints(currentStream: MediaStream | null, constraints: 
         return;
     }
     for (const track of currentStream.getVideoTracks()) {
-        toggleConstraints(track, constraints);
+        toggleConstraints(track, constraints).catch((e) =>
+            console.error("Error while setting new camera constraints:", e)
+        );
     }
 }
 
@@ -368,19 +382,21 @@ function applyMicrophoneConstraints(
         return;
     }
     for (const track of currentStream.getAudioTracks()) {
-        toggleConstraints(track, constraints);
+        toggleConstraints(track, constraints).catch((e) =>
+            console.error("Error while setting new audio constraints:", e)
+        );
     }
 }
 
-function toggleConstraints(track: MediaStreamTrack, constraints: MediaTrackConstraints | boolean): void {
+async function toggleConstraints(track: MediaStreamTrack, constraints: MediaTrackConstraints | boolean): Promise<void> {
     if (implementCorrectTrackBehavior) {
         track.enabled = constraints !== false;
     } else if (constraints === false) {
         track.stop();
     }
-    // @ts-ignore
+
     if (typeof constraints !== "boolean" && constraints !== true) {
-        track.applyConstraints(constraints);
+        return track.applyConstraints(constraints);
     }
 }
 
@@ -414,7 +430,7 @@ export const localStreamStore = derived<Readable<MediaStreamConstraints>, LocalS
                     // TODO: does it make sense to pop this error when retrying?
                     set({
                         type: "error",
-                        error: e,
+                        error: e instanceof Error ? e : new Error("An unknown error happened"),
                     });
                     // Let's try without video constraints
                     if (constraints.video !== false) {
@@ -432,7 +448,7 @@ export const localStreamStore = derived<Readable<MediaStreamConstraints>, LocalS
                     console.info("Error. Unable to get microphone and/or camera access.", constraints, e);
                     set({
                         type: "error",
-                        error: e,
+                        error: e instanceof Error ? e : new Error("An unknown error happened"),
                     });
                 }
             }
@@ -472,7 +488,12 @@ export const localStreamStore = derived<Readable<MediaStreamConstraints>, LocalS
                     type: "success",
                     stream: null,
                 });
-                initStream(constraints);
+                initStream(constraints).catch((e) => {
+                    set({
+                        type: "error",
+                        error: e instanceof Error ? e : new Error("An unknown error happened"),
+                    });
+                });
             }
         } else {
             //on bad navigators like chrome, we have to stop the tracks when we mute and reinstantiate the stream when we need to unmute
@@ -484,7 +505,12 @@ export const localStreamStore = derived<Readable<MediaStreamConstraints>, LocalS
                 });
             } //we reemit the stream if it was muted just to be sure
             else if (constraints.audio /* && !oldConstraints.audio*/ || (!oldConstraints.video && constraints.video)) {
-                initStream(constraints);
+                initStream(constraints).catch((e) => {
+                    set({
+                        type: "error",
+                        error: e instanceof Error ? e : new Error("An unknown error happened"),
+                    });
+                });
             }
             oldConstraints = {
                 video: !!constraints.video,
@@ -607,13 +633,3 @@ localStreamStore.subscribe((streamResult) => {
         }
     }
 });
-
-/**
- * A store containing the real active media is mobile
- */
-export const obtainedMediaConstraintIsMobileStore = writable(false);
-
-/**
- * A store containing if user is silent, so if he is in silent zone. This permit to show et hide camera of user
- */
-export const isSilentStore = writable(false);

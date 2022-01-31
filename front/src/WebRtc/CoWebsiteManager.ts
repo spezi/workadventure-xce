@@ -1,7 +1,6 @@
 import { HtmlUtils } from "./HtmlUtils";
 import { Subject } from "rxjs";
 import { iframeListener } from "../Api/IframeListener";
-import { touchScreenManager } from "../Touch/TouchScreenManager";
 import { waScaleManager } from "../Phaser/Services/WaScaleManager";
 
 enum iframeStates {
@@ -10,9 +9,13 @@ enum iframeStates {
     opened,
 }
 
-const cowebsiteDivId = "cowebsite"; // the id of the whole container.
-const cowebsiteMainDomId = "cowebsite-main"; // the id of the parent div of the iframe.
+const cowebsiteDomId = "cowebsite"; // the id of the whole container.
+const cowebsiteContainerDomId = "cowebsite-container"; // the id of the whole container.
+const cowebsiteMainDomId = "cowebsite-slot-0"; // the id of the parent div of the iframe.
+const cowebsiteBufferDomId = "cowebsite-buffer"; // the id of the container who contains cowebsite iframes.
 const cowebsiteAsideDomId = "cowebsite-aside"; // the id of the parent div of the iframe.
+const cowebsiteAsideHolderDomId = "cowebsite-aside-holder";
+const cowebsiteSubIconsDomId = "cowebsite-sub-icons";
 export const cowebsiteCloseButtonId = "cowebsite-close";
 const cowebsiteFullScreenButtonId = "cowebsite-fullscreen";
 const cowebsiteOpenFullScreenImageId = "cowebsite-fullscreen-open";
@@ -24,8 +27,19 @@ interface TouchMoveCoordinates {
     y: number;
 }
 
+export type CoWebsite = {
+    iframe: HTMLIFrameElement;
+    icon: HTMLDivElement;
+    position: number;
+};
+
+type CoWebsiteSlot = {
+    container: HTMLElement;
+    position: number;
+};
+
 class CoWebsiteManager {
-    private opened: iframeStates = iframeStates.closed;
+    private openedMain: iframeStates = iframeStates.closed;
 
     private _onResize: Subject<void> = new Subject();
     public onResize = this._onResize.asObservable();
@@ -34,30 +48,42 @@ class CoWebsiteManager {
      * So we use this promise to queue up every cowebsite state transition
      */
     private currentOperationPromise: Promise<void> = Promise.resolve();
-    private cowebsiteDiv: HTMLDivElement;
+    private cowebsiteDom: HTMLDivElement;
+    private cowebsiteContainerDom: HTMLDivElement;
     private resizing: boolean = false;
     private cowebsiteMainDom: HTMLDivElement;
+    private cowebsiteBufferDom: HTMLDivElement;
     private cowebsiteAsideDom: HTMLDivElement;
+    private cowebsiteAsideHolderDom: HTMLDivElement;
+    private cowebsiteSubIconsDom: HTMLDivElement;
     private previousTouchMoveCoordinates: TouchMoveCoordinates | null = null; //only use on touchscreens to track touch movement
 
+    private coWebsites: CoWebsite[] = [];
+
+    private slots: CoWebsiteSlot[];
+
+    private resizeObserver = new ResizeObserver((entries) => {
+        this.resizeAllIframes();
+    });
+
     get width(): number {
-        return this.cowebsiteDiv.clientWidth;
+        return this.cowebsiteDom.clientWidth;
     }
 
     set width(width: number) {
-        this.cowebsiteDiv.style.width = width + "px";
+        this.cowebsiteDom.style.width = width + "px";
     }
 
     set widthPercent(width: number) {
-        this.cowebsiteDiv.style.width = width + "%";
+        this.cowebsiteDom.style.width = width + "%";
     }
 
     get height(): number {
-        return this.cowebsiteDiv.clientHeight;
+        return this.cowebsiteDom.clientHeight;
     }
 
     set height(height: number) {
-        this.cowebsiteDiv.style.height = height + "px";
+        this.cowebsiteDom.style.height = height + "px";
     }
 
     get verticalMode(): boolean {
@@ -69,19 +95,60 @@ class CoWebsiteManager {
     }
 
     constructor() {
-        this.cowebsiteDiv = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteDivId);
+        this.cowebsiteDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteDomId);
+        this.cowebsiteContainerDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteContainerDomId);
         this.cowebsiteMainDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteMainDomId);
+        this.cowebsiteBufferDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteBufferDomId);
         this.cowebsiteAsideDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteAsideDomId);
+        this.cowebsiteAsideHolderDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteAsideHolderDomId);
+        this.cowebsiteSubIconsDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteSubIconsDomId);
+        this.initResizeListeners();
 
-        if (touchScreenManager.supportTouchScreen) {
-            this.initResizeListeners(true);
-        }
-        this.initResizeListeners(false);
+        this.resizeObserver.observe(this.cowebsiteDom);
+        this.resizeObserver.observe(this.cowebsiteContainerDom);
 
-        const buttonCloseFrame = HtmlUtils.getElementByIdOrFail(cowebsiteCloseButtonId);
-        buttonCloseFrame.addEventListener("click", () => {
-            buttonCloseFrame.blur();
-            this.closeCoWebsite();
+        this.slots = [
+            {
+                container: this.cowebsiteMainDom,
+                position: 0,
+            },
+            {
+                container: HtmlUtils.getElementByIdOrFail<HTMLDivElement>("cowebsite-slot-1"),
+                position: 1,
+            },
+            {
+                container: HtmlUtils.getElementByIdOrFail<HTMLDivElement>("cowebsite-slot-2"),
+                position: 2,
+            },
+            {
+                container: HtmlUtils.getElementByIdOrFail<HTMLDivElement>("cowebsite-slot-3"),
+                position: 3,
+            },
+            {
+                container: HtmlUtils.getElementByIdOrFail<HTMLDivElement>("cowebsite-slot-4"),
+                position: 4,
+            },
+        ];
+
+        this.slots.forEach((slot) => {
+            this.resizeObserver.observe(slot.container);
+        });
+
+        this.initActionsListeners();
+
+        const buttonCloseCoWebsites = HtmlUtils.getElementByIdOrFail(cowebsiteCloseButtonId);
+        buttonCloseCoWebsites.addEventListener("click", () => {
+            if (this.isSmallScreen() && this.coWebsites.length > 1) {
+                const coWebsite = this.getCoWebsiteByPosition(0);
+
+                if (coWebsite) {
+                    this.removeCoWebsiteFromStack(coWebsite);
+                    return;
+                }
+            }
+
+            buttonCloseCoWebsites.blur();
+            this.closeCoWebsites();
         });
 
         const buttonFullScreenFrame = HtmlUtils.getElementByIdOrFail(cowebsiteFullScreenButtonId);
@@ -91,7 +158,20 @@ class CoWebsiteManager {
         });
     }
 
-    private initResizeListeners(touchMode: boolean) {
+    public getDevicePixelRatio(): number {
+        //on chrome engines, movementX and movementY return global screens coordinates while other browser return pixels
+        //so on chrome-based browser we need to adjust using 'devicePixelRatio'
+        return window.navigator.userAgent.includes("Firefox") ? 1 : window.devicePixelRatio;
+    }
+
+    private isSmallScreen(): boolean {
+        return (
+            window.matchMedia("(max-aspect-ratio: 1/1)").matches ||
+            window.matchMedia("(max-width:960px) and (max-height:768px)").matches
+        );
+    }
+
+    private initResizeListeners() {
         const movecallback = (event: MouseEvent | TouchEvent) => {
             let x, y;
             if (event.type === "mousemove") {
@@ -110,60 +190,278 @@ class CoWebsiteManager {
             this.fire();
         };
 
-        this.cowebsiteAsideDom.addEventListener(touchMode ? "touchstart" : "mousedown", (event) => {
+        this.cowebsiteAsideHolderDom.addEventListener("mousedown", (event) => {
+            if (this.isFullScreen) return;
+            this.cowebsiteMainDom.style.display = "none";
             this.resizing = true;
-            this.getIframeDom().style.display = "none";
-            if (touchMode) {
-                const touchEvent = (event as TouchEvent).touches[0];
-                this.previousTouchMoveCoordinates = { x: touchEvent.pageX, y: touchEvent.pageY };
-            }
-
-            document.addEventListener(touchMode ? "touchmove" : "mousemove", movecallback);
+            document.addEventListener("mousemove", movecallback);
         });
 
-        document.addEventListener(touchMode ? "touchend" : "mouseup", (event) => {
-            if (!this.resizing) return;
-            if (touchMode) {
-                this.previousTouchMoveCoordinates = null;
-            }
-            document.removeEventListener(touchMode ? "touchmove" : "mousemove", movecallback);
-            this.getIframeDom().style.display = "block";
+        document.addEventListener("mouseup", (event) => {
+            if (!this.resizing || this.isFullScreen) return;
+            document.removeEventListener("mousemove", movecallback);
+            this.cowebsiteMainDom.style.display = "block";
             this.resizing = false;
+            this.cowebsiteMainDom.style.display = "flex";
+        });
+
+        this.cowebsiteAsideHolderDom.addEventListener("touchstart", (event) => {
+            if (this.isFullScreen) return;
+            this.cowebsiteMainDom.style.display = "none";
+            this.resizing = true;
+            const touchEvent = event.touches[0];
+            this.previousTouchMoveCoordinates = { x: touchEvent.pageX, y: touchEvent.pageY };
+            document.addEventListener("touchmove", movecallback);
+        });
+
+        document.addEventListener("touchend", (event) => {
+            if (!this.resizing || this.isFullScreen) return;
+            this.previousTouchMoveCoordinates = null;
+            document.removeEventListener("touchmove", movecallback);
+            this.cowebsiteMainDom.style.display = "block";
+            this.resizing = false;
+            this.cowebsiteMainDom.style.display = "flex";
         });
     }
 
-    private getDevicePixelRatio(): number {
-        //on chrome engines, movementX and movementY return global screens coordinates while other browser return pixels
-        //so on chrome-based browser we need to adjust using 'devicePixelRatio'
-        return window.navigator.userAgent.includes("Firefox") ? 1 : window.devicePixelRatio;
+    private closeMain(): void {
+        this.cowebsiteDom.classList.remove("loaded"); //edit the css class to trigger the transition
+        this.cowebsiteDom.classList.add("hidden");
+        this.openedMain = iframeStates.closed;
+        this.resetStyleMain();
+        this.cowebsiteDom.style.display = "none";
+    }
+    private loadMain(): void {
+        this.cowebsiteDom.style.display = "flex";
+        this.cowebsiteDom.classList.remove("hidden"); //edit the css class to trigger the transition
+        this.cowebsiteDom.classList.add("loading");
+        this.openedMain = iframeStates.loading;
+    }
+    private openMain(): void {
+        this.cowebsiteDom.addEventListener("transitionend", () => {
+            this.resizeAllIframes();
+        });
+        this.cowebsiteDom.classList.remove("loading", "hidden"); //edit the css class to trigger the transition
+        this.openedMain = iframeStates.opened;
+        this.resetStyleMain();
     }
 
-    private close(): void {
-        this.cowebsiteDiv.classList.remove("loaded"); //edit the css class to trigger the transition
-        this.cowebsiteDiv.classList.add("hidden");
-        this.opened = iframeStates.closed;
-        this.resetStyle();
-    }
-    private load(): void {
-        this.cowebsiteDiv.classList.remove("hidden"); //edit the css class to trigger the transition
-        this.cowebsiteDiv.classList.add("loading");
-        this.opened = iframeStates.loading;
-    }
-    private open(): void {
-        this.cowebsiteDiv.classList.remove("loading", "hidden"); //edit the css class to trigger the transition
-        this.opened = iframeStates.opened;
-        this.resetStyle();
+    public resetStyleMain() {
+        this.cowebsiteDom.style.width = "";
+        this.cowebsiteDom.style.height = "";
     }
 
-    public resetStyle() {
-        this.cowebsiteDiv.style.width = "";
-        this.cowebsiteDiv.style.height = "";
+    private initActionsListeners() {
+        this.slots.forEach((slot: CoWebsiteSlot) => {
+            const expandButton = slot.container.querySelector(".expand");
+            const highlightButton = slot.container.querySelector(".hightlight");
+            const closeButton = slot.container.querySelector(".close");
+
+            if (expandButton) {
+                expandButton.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const coWebsite = this.getCoWebsiteByPosition(slot.position);
+
+                    if (!coWebsite) {
+                        return;
+                    }
+
+                    this.moveRightPreviousCoWebsite(coWebsite, 0);
+                });
+            }
+
+            if (highlightButton) {
+                highlightButton.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const coWebsite = this.getCoWebsiteByPosition(slot.position);
+
+                    if (!coWebsite) {
+                        return;
+                    }
+
+                    this.moveRightPreviousCoWebsite(coWebsite, 1);
+                });
+            }
+
+            if (closeButton) {
+                closeButton.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const coWebsite = this.getCoWebsiteByPosition(slot.position);
+
+                    if (!coWebsite) {
+                        return;
+                    }
+
+                    this.removeCoWebsiteFromStack(coWebsite);
+                });
+            }
+        });
     }
 
-    private getIframeDom(): HTMLIFrameElement {
-        const iframe = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteDivId).querySelector("iframe");
-        if (!iframe) throw new Error("Could not find iframe!");
-        return iframe;
+    public getCoWebsites(): CoWebsite[] {
+        return this.coWebsites;
+    }
+
+    public getCoWebsiteById(coWebsiteId: string): CoWebsite | undefined {
+        return this.coWebsites.find((coWebsite: CoWebsite) => coWebsite.iframe.id === coWebsiteId);
+    }
+
+    private getSlotByPosition(position: number): CoWebsiteSlot | undefined {
+        return this.slots.find((slot: CoWebsiteSlot) => slot.position === position);
+    }
+
+    private getCoWebsiteByPosition(position: number): CoWebsite | undefined {
+        return this.coWebsites.find((coWebsite: CoWebsite) => coWebsite.position === position);
+    }
+
+    private setIframeOffset(coWebsite: CoWebsite, slot: CoWebsiteSlot) {
+        const bounding = slot.container.getBoundingClientRect();
+
+        if (coWebsite.iframe.classList.contains("thumbnail")) {
+            coWebsite.iframe.style.width = (bounding.right - bounding.left) * 2 + "px";
+            coWebsite.iframe.style.height = (bounding.bottom - bounding.top) * 2 + "px";
+            coWebsite.iframe.style.top = bounding.top - Math.floor(bounding.height * 0.5) + "px";
+            coWebsite.iframe.style.left = bounding.left - Math.floor(bounding.width * 0.5) + "px";
+        } else {
+            coWebsite.iframe.style.top = bounding.top + "px";
+            coWebsite.iframe.style.left = bounding.left + "px";
+            coWebsite.iframe.style.width = bounding.right - bounding.left + "px";
+            coWebsite.iframe.style.height = bounding.bottom - bounding.top + "px";
+        }
+    }
+
+    private resizeAllIframes() {
+        this.coWebsites.forEach((coWebsite: CoWebsite) => {
+            const slot = this.getSlotByPosition(coWebsite.position);
+
+            if (slot) {
+                this.setIframeOffset(coWebsite, slot);
+            }
+        });
+    }
+
+    private moveCoWebsite(coWebsite: CoWebsite, newPosition: number) {
+        const oldSlot = this.getSlotByPosition(coWebsite.position);
+        const newSlot = this.getSlotByPosition(newPosition);
+
+        if (!newSlot) {
+            return;
+        }
+
+        coWebsite.iframe.scrolling = newPosition === 0 || newPosition === 1 ? "yes" : "no";
+
+        if (newPosition === 0) {
+            coWebsite.iframe.classList.add("main");
+            coWebsite.icon.style.display = "none";
+        } else {
+            coWebsite.iframe.classList.remove("main");
+            coWebsite.icon.style.display = "flex";
+        }
+
+        if (newPosition === 1) {
+            coWebsite.iframe.classList.add("sub-main");
+        } else {
+            coWebsite.iframe.classList.remove("sub-main");
+        }
+
+        if (newPosition >= 2) {
+            coWebsite.iframe.classList.add("thumbnail");
+        } else {
+            coWebsite.iframe.classList.remove("thumbnail");
+        }
+
+        coWebsite.position = newPosition;
+
+        if (oldSlot && !this.getCoWebsiteByPosition(oldSlot.position)) {
+            oldSlot.container.style.display = "none";
+        }
+
+        this.displayCowebsiteContainer();
+
+        newSlot.container.style.display = "block";
+
+        coWebsite.iframe.classList.remove("pixel");
+
+        this.resizeAllIframes();
+    }
+
+    private displayCowebsiteContainer() {
+        if (this.coWebsites.find((cowebsite) => cowebsite.position > 0)) {
+            this.cowebsiteContainerDom.style.display = "block";
+        } else {
+            this.cowebsiteContainerDom.style.display = "none";
+        }
+    }
+
+    private moveLeftPreviousCoWebsite(coWebsite: CoWebsite, newPosition: number) {
+        const nextCoWebsite = this.getCoWebsiteByPosition(coWebsite.position + 1);
+
+        this.moveCoWebsite(coWebsite, newPosition);
+
+        if (nextCoWebsite) {
+            this.moveLeftPreviousCoWebsite(nextCoWebsite, nextCoWebsite.position - 1);
+        }
+    }
+
+    private moveRightPreviousCoWebsite(coWebsite: CoWebsite, newPosition: number) {
+        if (newPosition >= 5) {
+            return;
+        }
+
+        const currentCoWebsite = this.getCoWebsiteByPosition(newPosition);
+
+        this.moveCoWebsite(coWebsite, newPosition);
+
+        if (newPosition === 4 || !currentCoWebsite || currentCoWebsite.iframe.id === coWebsite.iframe.id) {
+            return;
+        }
+
+        if (!currentCoWebsite) {
+            return;
+        }
+
+        this.moveRightPreviousCoWebsite(currentCoWebsite, currentCoWebsite.position + 1);
+    }
+
+    private removeCoWebsiteFromStack(coWebsite: CoWebsite) {
+        this.coWebsites = this.coWebsites.filter(
+            (coWebsiteToRemove: CoWebsite) => coWebsiteToRemove.iframe.id !== coWebsite.iframe.id
+        );
+
+        if (this.coWebsites.length < 1) {
+            this.closeMain();
+        }
+
+        if (coWebsite.position > 0) {
+            const slot = this.getSlotByPosition(coWebsite.position);
+            if (slot) {
+                slot.container.style.display = "none";
+            }
+        }
+
+        const previousCoWebsite = this.coWebsites.find(
+            (coWebsiteToCheck: CoWebsite) => coWebsite.position + 1 === coWebsiteToCheck.position
+        );
+
+        if (previousCoWebsite) {
+            this.moveLeftPreviousCoWebsite(previousCoWebsite, coWebsite.position);
+        }
+
+        this.displayCowebsiteContainer();
+
+        coWebsite.icon.remove();
+        coWebsite.iframe.remove();
+    }
+
+    public searchJitsi(): CoWebsite | undefined {
+        return this.coWebsites.find((coWebsite: CoWebsite) => coWebsite.iframe.id.toLowerCase().includes("jitsi"));
+    }
+
+    private generateCoWebsiteIcon(iframe: HTMLIFrameElement): HTMLDivElement {
+        const icon = document.createElement("div");
+        icon.id = "cowebsite-icon-" + iframe.id;
+        icon.style.display = "none";
+        return icon;
     }
 
     public loadCoWebsite(
@@ -171,89 +469,149 @@ class CoWebsiteManager {
         base: string,
         allowApi?: boolean,
         allowPolicy?: string,
-        widthPercent?: number
-    ): void {
-        this.load();
-        this.cowebsiteMainDom.innerHTML = ``;
+        widthPercent?: number,
+        position?: number
+    ): Promise<CoWebsite> {
+        return this.addCoWebsite(
+            (iframeBuffer) => {
+                const iframe = document.createElement("iframe");
+                iframe.src = new URL(url, base).toString();
 
-        const iframe = document.createElement("iframe");
-        iframe.id = "cowebsite-iframe";
-        iframe.src = new URL(url, base).toString();
-        if (allowPolicy) {
-            iframe.allow = allowPolicy;
-        }
-        const onloadPromise = new Promise<void>((resolve) => {
-            iframe.onload = () => resolve();
-        });
-        if (allowApi) {
-            iframeListener.registerIframe(iframe);
-        }
-        this.cowebsiteMainDom.appendChild(iframe);
-        const onTimeoutPromise = new Promise<void>((resolve) => {
-            setTimeout(() => resolve(), 2000);
-        });
-        this.currentOperationPromise = this.currentOperationPromise
-            .then(() => Promise.race([onloadPromise, onTimeoutPromise]))
-            .then(() => {
-                this.open();
-                if (widthPercent) {
-                    this.widthPercent = widthPercent;
+                if (allowPolicy) {
+                    iframe.allow = allowPolicy;
                 }
-                setTimeout(() => {
-                    this.fire();
-                }, animationTime);
-            })
-            .catch((err) => {
-                console.error("Error loadCoWebsite => ", err);
-                this.closeCoWebsite();
-            });
+
+                if (allowApi) {
+                    iframeListener.registerIframe(iframe);
+                }
+
+                iframeBuffer.appendChild(iframe);
+
+                return iframe;
+            },
+            widthPercent,
+            position
+        );
     }
 
-    /**
-     * Just like loadCoWebsite but the div can be filled by the user.
-     */
-    public insertCoWebsite(callback: (cowebsite: HTMLDivElement) => Promise<void>, widthPercent?: number): void {
-        this.load();
-        this.cowebsiteMainDom.innerHTML = ``;
-        this.currentOperationPromise = this.currentOperationPromise
-            .then(() => callback(this.cowebsiteMainDom))
-            .then(() => {
-                this.open();
-                if (widthPercent) {
-                    this.widthPercent = widthPercent;
+    public async addCoWebsite(
+        callback: (iframeBuffer: HTMLDivElement) => PromiseLike<HTMLIFrameElement> | HTMLIFrameElement,
+        widthPercent?: number,
+        position?: number
+    ): Promise<CoWebsite> {
+        return new Promise((resolve, reject) => {
+            if (this.coWebsites.length < 1) {
+                this.loadMain();
+            } else if (this.coWebsites.length === 5) {
+                throw new Error("Too many we");
+            }
+
+            Promise.resolve(callback(this.cowebsiteBufferDom)).then((iframe) => {
+                iframe?.classList.add("pixel");
+
+                if (!iframe.id) {
+                    do {
+                        iframe.id = "cowebsite-iframe-" + (Math.random() + 1).toString(36).substring(7);
+                    } while (this.getCoWebsiteById(iframe.id));
                 }
-                setTimeout(() => {
-                    this.fire();
-                }, animationTime);
-            })
-            .catch((err) => {
-                console.error("Error insertCoWebsite => ", err);
-                this.closeCoWebsite();
+
+                const onloadPromise = new Promise<void>((resolve) => {
+                    iframe.onload = () => resolve();
+                });
+
+                const icon = this.generateCoWebsiteIcon(iframe);
+
+                const coWebsite = {
+                    iframe,
+                    icon,
+                    position: position ?? this.coWebsites.length,
+                };
+
+                // Iframe management on mobile
+                icon.addEventListener("click", () => {
+                    if (this.isSmallScreen()) {
+                        this.moveRightPreviousCoWebsite(coWebsite, 0);
+                    }
+                });
+
+                this.coWebsites.push(coWebsite);
+                this.cowebsiteSubIconsDom.appendChild(icon);
+
+                const onTimeoutPromise = new Promise<void>((resolve) => {
+                    setTimeout(() => resolve(), 2000);
+                });
+
+                this.currentOperationPromise = this.currentOperationPromise
+                    .then(() => Promise.race([onloadPromise, onTimeoutPromise]))
+                    .then(() => {
+                        if (coWebsite.position === 0) {
+                            this.openMain();
+                            if (widthPercent) {
+                                this.widthPercent = widthPercent;
+                            }
+
+                            setTimeout(() => {
+                                this.fire();
+                                position !== undefined
+                                    ? this.moveRightPreviousCoWebsite(coWebsite, coWebsite.position)
+                                    : this.moveCoWebsite(coWebsite, coWebsite.position);
+                            }, animationTime);
+                        } else {
+                            position !== undefined
+                                ? this.moveRightPreviousCoWebsite(coWebsite, coWebsite.position)
+                                : this.moveCoWebsite(coWebsite, coWebsite.position);
+                        }
+
+                        return resolve(coWebsite);
+                    })
+                    .catch((err) => {
+                        console.error("Error loadCoWebsite => ", err);
+                        this.removeCoWebsiteFromStack(coWebsite);
+                        return reject();
+                    });
             });
+        });
     }
 
-    public closeCoWebsite(): Promise<void> {
+    public closeCoWebsite(coWebsite: CoWebsite): Promise<void> {
         this.currentOperationPromise = this.currentOperationPromise.then(
             () =>
-                new Promise((resolve, reject) => {
-                    if (this.opened === iframeStates.closed) resolve(); //this method may be called twice, in case of iframe error for example
-                    this.close();
-                    this.fire();
-                    const iframe = this.cowebsiteDiv.querySelector("iframe");
-                    if (iframe) {
-                        iframeListener.unregisterIframe(iframe);
+                new Promise((resolve) => {
+                    if (this.coWebsites.length === 1) {
+                        if (this.openedMain === iframeStates.closed) resolve(); //this method may be called twice, in case of iframe error for example
+                        this.closeMain();
+                        this.fire();
                     }
-                    setTimeout(() => {
-                        this.cowebsiteMainDom.innerHTML = ``;
-                        resolve();
-                    }, animationTime);
+
+                    if (coWebsite) {
+                        iframeListener.unregisterIframe(coWebsite.iframe);
+                    }
+
+                    this.removeCoWebsiteFromStack(coWebsite);
+                    resolve();
                 })
         );
         return this.currentOperationPromise;
     }
 
+    public closeJitsi() {
+        const jitsi = this.searchJitsi();
+        if (jitsi) {
+            this.closeCoWebsite(jitsi);
+        }
+    }
+
+    public closeCoWebsites(): Promise<void> {
+        this.currentOperationPromise = this.currentOperationPromise.then(() => {
+            this.coWebsites.forEach((coWebsite: CoWebsite) => {
+                this.closeCoWebsite(coWebsite);
+            });
+        });
+        return this.currentOperationPromise;
+    }
+
     public getGameSize(): { width: number; height: number } {
-        if (this.opened !== iframeStates.opened) {
+        if (this.openedMain !== iframeStates.opened) {
             return {
                 width: window.innerWidth,
                 height: window.innerHeight,
@@ -275,20 +633,26 @@ class CoWebsiteManager {
     private fire(): void {
         this._onResize.next();
         waScaleManager.applyNewSize();
+        waScaleManager.refreshFocusOnTarget();
     }
 
     private fullscreen(): void {
+        const openFullscreenImage = HtmlUtils.getElementByIdOrFail(cowebsiteOpenFullScreenImageId);
+        const closeFullScreenImage = HtmlUtils.getElementByIdOrFail(cowebsiteCloseFullScreenImageId);
+
         if (this.isFullScreen) {
-            this.resetStyle();
+            this.resetStyleMain();
             this.fire();
             //we don't trigger a resize of the phaser game since it won't be visible anyway.
-            HtmlUtils.getElementByIdOrFail(cowebsiteOpenFullScreenImageId).style.display = "inline";
-            HtmlUtils.getElementByIdOrFail(cowebsiteCloseFullScreenImageId).style.display = "none";
+            this.cowebsiteAsideHolderDom.style.visibility = "visible";
+            openFullscreenImage.style.display = "inline";
+            closeFullScreenImage.style.display = "none";
         } else {
             this.verticalMode ? (this.height = window.innerHeight) : (this.width = window.innerWidth);
             //we don't trigger a resize of the phaser game since it won't be visible anyway.
-            HtmlUtils.getElementByIdOrFail(cowebsiteOpenFullScreenImageId).style.display = "none";
-            HtmlUtils.getElementByIdOrFail(cowebsiteCloseFullScreenImageId).style.display = "inline";
+            this.cowebsiteAsideHolderDom.style.visibility = "hidden";
+            openFullscreenImage.style.display = "none";
+            closeFullScreenImage.style.display = "inline";
         }
     }
 }

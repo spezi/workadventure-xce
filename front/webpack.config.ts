@@ -7,7 +7,6 @@ import MiniCssExtractPlugin from "mini-css-extract-plugin";
 import sveltePreprocess from "svelte-preprocess";
 import ForkTsCheckerWebpackPlugin from "fork-ts-checker-webpack-plugin";
 import NodePolyfillPlugin from "node-polyfill-webpack-plugin";
-import { POSTHOG_API_KEY, PROFILE_URL } from "./src/Enum/EnvironmentVariable";
 
 const mode = process.env.NODE_ENV ?? "development";
 const buildNpmTypingsForApi = !!process.env.BUILD_TYPINGS;
@@ -33,6 +32,7 @@ module.exports = {
             rewrites: [{ from: /^_\/.*$/, to: "/index.html" }],
             disableDotRule: true,
         },
+        liveReload: process.env.LIVE_RELOAD != "0" && process.env.LIVE_RELOAD != "false",
     },
     module: {
         rules: [
@@ -190,9 +190,10 @@ module.exports = {
             DISABLE_NOTIFICATIONS: false,
             PUSHER_URL: undefined,
             UPLOADER_URL: null,
-            ADMIN_URL: undefined,
+            ADMIN_URL: null,
             CONTACT_URL: null,
             PROFILE_URL: null,
+            ICON_URL: null,
             DEBUG_MODE: null,
             STUN_SERVER: null,
             TURN_SERVER: null,
@@ -207,6 +208,8 @@ module.exports = {
             POSTHOG_API_KEY: null,
             POSTHOG_URL: null,
             NODE_ENV: mode,
+            DISABLE_ANONYMOUS: false,
+            OPID_LOGIN_SCREEN_PROVIDER: null,
         }),
     ],
 } as Configuration & WebpackDevServer.Configuration;

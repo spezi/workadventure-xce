@@ -59,9 +59,11 @@
               "JITSI_URL": env.JITSI_URL,
               "API_URL": "back1:50051,back2:50051",
               "SECRET_JITSI_KEY": env.SECRET_JITSI_KEY,
+              "FRONT_URL": "https://play-"+url
             } + (if adminUrl != null then {
               "ADMIN_API_URL": adminUrl,
               "ADMIN_API_TOKEN": env.ADMIN_API_TOKEN,
+              "ADMIN_SOCKETS_TOKEN": env.ADMIN_SOCKETS_TOKEN,
             } else {})
           },
     "front": {
@@ -99,7 +101,10 @@
       "host": {
         "url": "maps-"+url
       },
-      "ports": [80]
+      "ports": [80],
+      "env": {
+          "FRONT_URL": "https://play-"+url
+      }
     },
     "redis": {
       "image": "redis:6",

@@ -3,14 +3,18 @@ import { SpeechBubble } from "./SpeechBubble";
 import Text = Phaser.GameObjects.Text;
 import Container = Phaser.GameObjects.Container;
 import Sprite = Phaser.GameObjects.Sprite;
+import DOMElement = Phaser.GameObjects.DOMElement;
 import { TextureError } from "../../Exception/TextureError";
 import { Companion } from "../Companion/Companion";
 import type { GameScene } from "../Game/GameScene";
 import { DEPTH_INGAME_TEXT_INDEX } from "../Game/DepthIndexes";
-import { waScaleManager } from "../Services/WaScaleManager";
 import type OutlinePipelinePlugin from "phaser3-rex-plugins/plugins/outlinepipeline-plugin.js";
 import { isSilentStore } from "../../Stores/MediaStore";
-import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
+import { lazyLoadPlayerCharacterTextures, loadAllDefaultModels } from "./PlayerTexturesLoadingManager";
+import { TexturesHelper } from "../Helpers/TexturesHelper";
+import type { PictureStore } from "../../Stores/PictureStore";
+import { Unsubscriber, Writable, writable } from "svelte/store";
+import { createColorStore } from "../../Stores/OutlineColorStore";
 
 const playerNameY = -25;
 
@@ -29,13 +33,16 @@ export abstract class Character extends Container {
     private readonly playerName: Text;
     public PlayerValue: string;
     public sprites: Map<string, Sprite>;
-    private lastDirection: PlayerAnimationDirections = PlayerAnimationDirections.Down;
+    protected lastDirection: PlayerAnimationDirections = PlayerAnimationDirections.Down;
     //private teleportation: Sprite;
     private invisible: boolean;
     public companion?: Companion;
-    private emote: Phaser.GameObjects.Text | null = null;
+    private emote: Phaser.GameObjects.DOMElement | null = null;
     private emoteTween: Phaser.Tweens.Tween | null = null;
     scene: GameScene;
+    private readonly _pictureStore: Writable<string | undefined>;
+    private readonly outlineColorStore = createColorStore();
+    private readonly outlineColorStoreUnsubscribe: Unsubscriber;
 
     constructor(
         scene: GameScene,
@@ -56,17 +63,23 @@ export abstract class Character extends Container {
         this.invisible = true;
 
         this.sprites = new Map<string, Sprite>();
+        this._pictureStore = writable(undefined);
 
         //textures are inside a Promise in case they need to be lazyloaded before use.
         texturesPromise
             .then((textures) => {
                 this.addTextures(textures, frame);
                 this.invisible = false;
+                this.playAnimation(direction, moving);
+                return this.getSnapshot().then((htmlImageElementSrc) => {
+                    this._pictureStore.set(htmlImageElementSrc);
+                });
             })
             .catch(() => {
                 return lazyLoadPlayerCharacterTextures(scene.load, ["color_22", "eyes_23"]).then((textures) => {
                     this.addTextures(textures, frame);
                     this.invisible = false;
+                    this.playAnimation(direction, moving);
                 });
             });
 
@@ -87,17 +100,25 @@ export abstract class Character extends Container {
             });
 
             this.on("pointerover", () => {
-                this.getOutlinePlugin()?.add(this.playerName, {
-                    thickness: 2,
-                    outlineColor: 0xffff00,
-                });
-                this.scene.markDirty();
+                this.outlineColorStore.pointerOver();
             });
             this.on("pointerout", () => {
-                this.getOutlinePlugin()?.remove(this.playerName);
-                this.scene.markDirty();
+                this.outlineColorStore.pointerOut();
             });
         }
+
+        this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
+            if (color === undefined) {
+                this.getOutlinePlugin()?.remove(this.playerName);
+            } else {
+                this.getOutlinePlugin()?.remove(this.playerName);
+                this.getOutlinePlugin()?.add(this.playerName, {
+                    thickness: 2,
+                    outlineColor: color,
+                });
+            }
+            this.scene.markDirty();
+        });
 
         scene.add.existing(this);
 
@@ -107,17 +128,27 @@ export abstract class Character extends Container {
         this.setSize(16, 16);
         this.getBody().setSize(16, 16); //edit the hitbox to better match the character model
         this.getBody().setOffset(0, 8);
-        this.setDepth(-1);
-
-        this.playAnimation(direction, moving);
+        this.setDepth(0);
 
         if (typeof companion === "string") {
             this.addCompanion(companion, companionTexturePromise);
         }
     }
 
-    private getOutlinePlugin(): OutlinePipelinePlugin | undefined {
-        return this.scene.plugins.get("rexOutlinePipeline") as unknown as OutlinePipelinePlugin | undefined;
+    private async getSnapshot(): Promise<string> {
+        const sprites = Array.from(this.sprites.values()).map((sprite) => {
+            return { sprite, frame: 1 };
+        });
+        return TexturesHelper.getSnapshot(this.scene, ...sprites).catch((reason) => {
+            console.warn(reason);
+            for (const sprite of this.sprites.values()) {
+                // we can be sure that either predefined woka or body texture is at this point loaded
+                if (sprite.texture.key.includes("color") || sprite.texture.key.includes("male")) {
+                    return this.scene.textures.getBase64(sprite.texture.key);
+                }
+            }
+            return "male1";
+        });
     }
 
     public addCompanion(name: string, texturePromise?: Promise<string>): void {
@@ -127,6 +158,10 @@ export abstract class Character extends Container {
     }
 
     public addTextures(textures: string[], frame?: string | number): void {
+        if (textures.length < 1) {
+            throw new TextureError("no texture given");
+        }
+
         for (const texture of textures) {
             if (this.scene && !this.scene.textures.exists(texture)) {
                 throw new TextureError("texture not found");
@@ -147,6 +182,10 @@ export abstract class Character extends Container {
             }
             this.sprites.set(texture, sprite);
         }
+    }
+
+    private getOutlinePlugin(): OutlinePipelinePlugin | undefined {
+        return this.scene.plugins.get("rexOutlinePipeline") as unknown as OutlinePipelinePlugin | undefined;
     }
 
     private getPlayerAnimations(name: string): AnimationData[] {
@@ -238,24 +277,20 @@ export abstract class Character extends Container {
 
         body.setVelocity(x, y);
 
-        // up or down animations are prioritized over left and right
-        if (body.velocity.y < 0) {
-            //moving up
-            this.lastDirection = PlayerAnimationDirections.Up;
-            this.playAnimation(PlayerAnimationDirections.Up, true);
-        } else if (body.velocity.y > 0) {
-            //moving down
-            this.lastDirection = PlayerAnimationDirections.Down;
-            this.playAnimation(PlayerAnimationDirections.Down, true);
-        } else if (body.velocity.x > 0) {
-            //moving right
-            this.lastDirection = PlayerAnimationDirections.Right;
-            this.playAnimation(PlayerAnimationDirections.Right, true);
-        } else if (body.velocity.x < 0) {
-            //moving left
-            this.lastDirection = PlayerAnimationDirections.Left;
-            this.playAnimation(PlayerAnimationDirections.Left, true);
+        if (Math.abs(body.velocity.x) > Math.abs(body.velocity.y)) {
+            if (body.velocity.x < 0) {
+                this.lastDirection = PlayerAnimationDirections.Left;
+            } else if (body.velocity.x > 0) {
+                this.lastDirection = PlayerAnimationDirections.Right;
+            }
+        } else {
+            if (body.velocity.y < 0) {
+                this.lastDirection = PlayerAnimationDirections.Up;
+            } else if (body.velocity.y > 0) {
+                this.lastDirection = PlayerAnimationDirections.Down;
+            }
         }
+        this.playAnimation(this.lastDirection, true);
 
         this.setDepth(this.y);
 
@@ -287,21 +322,20 @@ export abstract class Character extends Container {
             }
         }
         this.list.forEach((objectContaining) => objectContaining.destroy());
+        this.outlineColorStoreUnsubscribe();
         super.destroy();
     }
 
-    isSilent() {
-        isSilentStore.set(true);
-    }
-    noSilent() {
-        isSilentStore.set(false);
+    setSilent(silent: boolean) {
+        isSilentStore.set(silent);
     }
 
     playEmote(emote: string) {
         this.cancelPreviousEmote();
         const emoteY = -45;
-        this.playerName.setVisible(false);
-        this.emote = new Text(this.scene, -10, 0, emote, { fontSize: "20px" });
+        const image = new Image(16, 16);
+        image.src = emote;
+        this.emote = new DOMElement(this.scene, -1, 0, image, "z-index:10;");
         this.emote.setAlpha(0);
         this.add(this.emote);
         this.createStartTransition(emoteY);
@@ -367,5 +401,17 @@ export abstract class Character extends Container {
         this.emote?.destroy();
         this.emote = null;
         this.playerName.setVisible(true);
+    }
+
+    public get pictureStore(): PictureStore {
+        return this._pictureStore;
+    }
+
+    public setOutlineColor(color: number): void {
+        this.outlineColorStore.setColor(color);
+    }
+
+    public removeOutlineColor(): void {
+        this.outlineColorStore.removeColor();
     }
 }

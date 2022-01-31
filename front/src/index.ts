@@ -141,13 +141,15 @@ const game = new Game(config);
 waScaleManager.setGame(game);
 
 window.addEventListener("resize", function (event) {
-    coWebsiteManager.resetStyle();
+    coWebsiteManager.resetStyleMain();
 
     waScaleManager.applyNewSize();
+    waScaleManager.refreshFocusOnTarget();
 });
 
 coWebsiteManager.onResize.subscribe(() => {
     waScaleManager.applyNewSize();
+    waScaleManager.refreshFocusOnTarget();
 });
 
 iframeListener.init();

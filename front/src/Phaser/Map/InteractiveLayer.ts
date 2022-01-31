@@ -7,7 +7,7 @@ import type { PositionInterface } from "../../Connexion/ConnexionModels";
 import type { ITiledMapTileLayer, ITiledMapProperty } from "./ITiledMap";
 
 interface SpriteEntity {
-    animation: string|false;
+    animation: string | false;
     sprite: Sprite;
     state: boolean;
     properties: TileProperties | undefined;
@@ -57,7 +57,7 @@ export class InteractiveLayer extends Container {
      */
     public update(time: number, delta: number): void {
         // limit this function to max. 15 times per second should be enough
-        if (this.lastUpdate + (1000 / 15) > time) {
+        if (this.lastUpdate + 1000 / 15 > time) {
             return;
         }
 
@@ -207,7 +207,7 @@ export class InteractiveLayer extends Container {
 
                 if (tileset !== null) {
                     const x = (i % layer.width) * tileset.tileWidth + tileset.tileWidth / 2;
-                    const y = (Math.floor(i / layer.width)) * tileset.tileHeight + tileset.tileHeight / 2;
+                    const y = Math.floor(i / layer.width) * tileset.tileHeight + tileset.tileHeight / 2;
 
                     const animation = this.getAnimationFromTile(tileset, index);
                     const key = `interactive-layer-${tileset.name}-${index}`;
@@ -218,17 +218,21 @@ export class InteractiveLayer extends Container {
                         // if an animation was found, add each frame to the image (if it doesn't already exist)
                         if (typeof scene.anims.get(key) === "undefined") {
                             for (const anim of animation) {
-                                this.addFrameToTilesetImage(tileset, String(anim.tileid), anim.tileid + tileset.firstgid);
+                                this.addFrameToTilesetImage(
+                                    tileset,
+                                    String(anim.tileid),
+                                    anim.tileid + tileset.firstgid
+                                );
                             }
 
                             scene.anims.create({
                                 key,
-                                frames: animation.map(frame => ({
+                                frames: animation.map((frame) => ({
                                     key: tileset.image.key,
                                     frame: String(frame.tileid),
-                                    duration: frame.duration
+                                    duration: frame.duration,
                                 })),
-                                repeat: 0
+                                repeat: 0,
                             });
                         }
 
@@ -247,7 +251,7 @@ export class InteractiveLayer extends Container {
                         animation: animation === null ? false : key,
                         sprite,
                         state: false,
-                        properties: tileset.getTileProperties(index) as TileProperties | undefined
+                        properties: tileset.getTileProperties(index) as TileProperties | undefined,
                     });
                 }
             }
@@ -261,7 +265,7 @@ export class InteractiveLayer extends Container {
      * @param {number} index
      * @returns {Tileset|null}
      */
-    private getTilesetContainingTile(index: number): Tileset|null {
+    private getTilesetContainingTile(index: number): Tileset | null {
         const scene = this.getScene();
 
         for (const tileset of scene.Map.tilesets) {
@@ -280,7 +284,7 @@ export class InteractiveLayer extends Container {
      * @param {number} index
      * @returns {TileAnimation[]|null}
      */
-    private getAnimationFromTile(tileset: Tileset, index: number): TileAnimation[]|null {
+    private getAnimationFromTile(tileset: Tileset, index: number): TileAnimation[] | null {
         const data = tileset.getTileData(index) as { animation: Array<TileAnimation> } | null;
 
         if (typeof data === "object" && data !== null && Array.isArray(data.animation)) {
@@ -288,7 +292,7 @@ export class InteractiveLayer extends Container {
             return animation;
         }
 
-        return null
+        return null;
     }
 
     /**
@@ -297,7 +301,7 @@ export class InteractiveLayer extends Container {
      * @returns {GameScene}
      */
     private getScene(): GameScene {
-        return (this.scene as GameScene);
+        return this.scene as GameScene;
     }
 
     /**
@@ -324,8 +328,8 @@ export class InteractiveLayer extends Container {
      * @param {string} name
      * @returns {string|boolean|number|undefined}
      */
-    private getLayerProperty(name: string): string|boolean|number|undefined {
-        const properties: ITiledMapProperty[]|undefined = this.layer.properties;
+    private getLayerProperty(name: string): string | boolean | number | undefined {
+        const properties: ITiledMapProperty[] | undefined = this.layer.properties;
 
         if (!properties) {
             return undefined;
@@ -348,7 +352,7 @@ export class InteractiveLayer extends Container {
      * @returns {boolean}
      */
     private shouldReverse(entity: SpriteEntity): boolean {
-        return typeof entity.properties !== "undefined" && entity.properties["reverseInactive"]
+        return typeof entity.properties !== "undefined" && entity.properties["reverseInactive"];
     }
 
     /**
@@ -360,8 +364,8 @@ export class InteractiveLayer extends Container {
     private getCharacterPosition(char: Character): PositionInterface {
         return {
             x: char.x,
-            y: char.y
-        }
+            y: char.y,
+        };
     }
 
     /**
@@ -372,13 +376,19 @@ export class InteractiveLayer extends Container {
      * @param {number} radius
      * @returns {boolean}
      */
-    private isPlayerInsideInteractionRadius(playerPosition: PositionInterface, sprite: Sprite, radius: number): boolean {
+    private isPlayerInsideInteractionRadius(
+        playerPosition: PositionInterface,
+        sprite: Sprite,
+        radius: number
+    ): boolean {
         const { x, y } = playerPosition;
 
-        return sprite.x - sprite.width * radius <= x + sprite.width / 2        // left
-            && sprite.y - sprite.height * radius <= y + sprite.height          // top
-            && sprite.x + sprite.width * (radius + 1) > x + sprite.width / 2   // right
-            && sprite.y + sprite.height * (radius + 1) > y + sprite.height     // bottom
+        return (
+            sprite.x - sprite.width * radius <= x + sprite.width / 2 && // left
+            sprite.y - sprite.height * radius <= y + sprite.height && // top
+            sprite.x + sprite.width * (radius + 1) > x + sprite.width / 2 && // right
+            sprite.y + sprite.height * (radius + 1) > y + sprite.height
+        ); // bottom
     }
 
     /**
@@ -392,7 +402,7 @@ export class InteractiveLayer extends Container {
      */
     private addFrameToTilesetImage(tileset: Tileset, key: string, index: number): void {
         if (!tileset.image.has(key)) {
-            const coordinates = (tileset.getTileTextureCoordinates(index) as { x: number, y: number });
+            const coordinates = tileset.getTileTextureCoordinates(index) as { x: number; y: number };
             tileset.image.add(key, 0, coordinates.x, coordinates.y, tileset.tileWidth, tileset.tileHeight);
         }
     }

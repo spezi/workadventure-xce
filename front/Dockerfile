@@ -1,18 +1,20 @@
 # protobuf build
-FROM node:14-buster-slim as builder
+FROM node:14.18.2-buster-slim@sha256:20bedf0c09de887379e59a41c04284974f5fb529cf0e13aab613473ce298da3d as builder
 WORKDIR /usr/src
 COPY messages .
-RUN yarn install && yarn proto
+RUN yarn install && yarn ts-proto
 
 
 # webpack build
-FROM node:14-buster-slim as builder2
+FROM node:14.18.2-buster-slim@sha256:20bedf0c09de887379e59a41c04284974f5fb529cf0e13aab613473ce298da3d as builder2
 WORKDIR /usr/src
 COPY front/yarn.lock front/package.json ./
 RUN yarn install
 
 COPY front .
-COPY --from=builder /usr/src/generated src/Messages/generated
+COPY --from=builder /usr/src/ts-proto-generated/protos src/Messages/ts-proto-generated
+RUN sed -i 's/import { Observable } from "rxjs";/import type { Observable } from "rxjs";/g' src/Messages/ts-proto-generated/messages.ts
+COPY --from=builder /usr/src/JsonMessages src/Messages/JsonMessages
 ENV NODE_ENV=production
 
 # Removing the iframe.html file from the final image as this adds a XSS attack.

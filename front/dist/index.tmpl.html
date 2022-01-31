@@ -30,13 +30,97 @@
 
         <base href="/">
         <link href="https://unpkg.com/nes.css@2.3.0/css/nes.min.css" rel="stylesheet" />
+        <link href="https://vjs.zencdn.net/7.17.0/video-js.css" rel="stylesheet" />
 
-        <title>WorkAdventure</title>
+        <title>WorkAdventure - spezi</title>
+        <style>
+            .resizer {
+                position: absolute; 
+                width: 10px; 
+                height: 10px; 
+                border-radius: 5px;
+            }
+
+            .resizer.nw {
+                top: -1px;
+                left: -1px;
+                cursor: nw-resize;
+            }
+
+            .resizer.ne {
+                top: -1px;
+                right: -1px;
+                cursor: ne-resize;
+            }
+
+            .resizer.sw {
+                bottom: -1px;
+                left: -1px;
+                cursor: sw-resize;
+            }
+
+            .resizer.se {
+                bottom: -1px;
+                right: -1px;
+                cursor: se-resize;
+            }
+
+        </style>
+        
     </head>
     <body id="body" style="margin: 0; background-color: #000">
+        
         <div class="main-container" id="main-container">
             <!-- Create the editor container -->
             <div id="game" class="game">
+                <div id="cowebsite-container">
+                    <div id="cowebsite-container-main">
+                        <div id="cowebsite-slot-1">
+                            <div class="actions">
+                                <button type="button" class="nes-btn is-primary expand">></button>
+                                <button type="button" class="nes-btn is-error close">&times;</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="cowebsite-container-sub">
+                        <div id="cowebsite-slot-2">
+                            <div class="overlay">
+                                <div class="actions">
+                                    <button type="button" title="Close" class="nes-btn is-error close">&times;</button>
+                                </div>
+                                <div class="actions-move">
+                                    <button type="button" title="Expand" class="nes-btn is-primary expand">></button>
+                                    <button type="button" title="Hightlight" class="nes-btn is-secondary hightlight">&Xi;</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="cowebsite-slot-3">
+                            <div class="overlay">
+                                <div class="actions">
+                                    <button type="button" title="Close" class="nes-btn is-error close">&times;</button>
+                                </div>
+                                <div class="actions-move">
+                                    <button type="button" title="Expand" class="nes-btn is-primary expand">></button>
+                                    <button type="button" title="Hightlight" class="nes-btn is-secondary hightlight">&Xi;</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="cowebsite-slot-4">
+                            <div class="overlay">
+                                <div class="actions">
+                                    <button type="button" title="Close" class="nes-btn is-error close">&times;</button>
+                                </div>
+                                <div class="actions-move">
+                                    <button type="button" title="Expand" class="nes-btn is-primary expand">></button>
+                                    <button type="button" title="Hightlight" class="nes-btn is-secondary hightlight">&Xi;</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div id="svelte-overlay"></div>
                 <div id="game-overlay" class="game-overlay">
                     <div id="main-section" class="main-section">
@@ -48,29 +132,46 @@
                 </div>
             </div>
             <div id="cowebsite" class="cowebsite hidden">
-                <aside id="cowebsite-aside">
-                    <img src="/static/images/menu.svg" alt="hold to resize"/>
+                <aside id="cowebsite-aside" class="noselect">
+                    <div id="cowebsite-aside-buttons">
+                        <button class="top-right-btn nes-btn is-error" id="cowebsite-close" alt="close all co-websites">
+                            &times;
+                        </button>
+                        <button class="top-right-btn nes-btn is-primary" id="cowebsite-fullscreen" alt="fullscreen mode">
+                            <img id="cowebsite-fullscreen-close" style="display: none;" src="resources/logos/fullscreen-exit.svg"/>
+                            <img id="cowebsite-fullscreen-open" src="resources/logos/fullscreen.svg"/>
+                        </button>
+                    </div>
+                    <div id="cowebsite-aside-holder">
+                        <img src="/static/images/menu.svg" alt="hold to resize"/>
+                    </div>
+                    <div id="cowebsite-sub-icons"></div>
                 </aside>
-                <main id="cowebsite-main">
-                </main>
-                <button class="top-right-btn" id="cowebsite-fullscreen" alt="fullscreen mode">
-                    <img id="cowebsite-fullscreen-open" src="resources/logos/fullscreen.svg"/>
-                    <img id="cowebsite-fullscreen-close" style="display: none;" src="resources/logos/fullscreen-exit.svg"/>
-                </button>
-                <button class="top-right-btn" id="cowebsite-close" alt="close the iframe">
-                    <img src="resources/logos/close.svg"/>
-                </button>
+                <main id="cowebsite-slot-0"></main>
+            </div>
+            <div id="cowebsite-buffer"></div>
+            
+            <div id="playvideo" style="position: absolute; top: 20px; left: 100px; background-color: black; width: 512px; height: 288px;">
+                <video
+                    id="fantasy-video"
+                    class="video-js vjs-theme-fantasy nyan"
+                    controls
+                    preload="auto"
+                    fluid="true"
+                    autoplay="true"
+                    poster="https://montevideo.mygulasch.de/grundstufevorstellung/grundstufevorstellung.png"
+                    data-setup='{ "fluid": true }'
+                >
+                        <source src="https://musi.kontakt.world:8080/musi/live.m3u8" type='application/x-mpegURL'>
+                </video>
+                <div class="resizer nw"></div>
+                <div class="resizer ne"></div>
+                <div class="resizer sw"></div>
+                <div class="resizer se"></div>
             </div>
 
-            <div id="videoplayerctrl" class="hidden">
-                <div class="videoplayer">
-                    <div id="videoplayer"></div>
-                    <label id="label-videoplayer_decrease_while_talking" for="videoplayer_decrease_while_talking" title="decrease background volume by 50% when entering conversations">
-                        autoreduce
-                        <input type="checkbox" id="videoplayer_decrease_while_talking" checked />
-                    </label>
-                </div>
-            </div>
+            
+
         </div>
 
         <div id="activeScreenSharing" class="active-screen-sharing active">
@@ -78,6 +179,127 @@
         <audio id="report-message">
             <source src="/resources/objects/report-message.mp3" type="audio/mp3">
         </audio>
+        <script src="https://vjs.zencdn.net/7.6.0/video.js"></script>
+
+        <script>
+
+            function ready(callbackFunc) {
+            if (document.readyState !== 'loading') {
+                // Document is already ready, call the callback directly
+                callbackFunc();
+            } else if (document.addEventListener) {
+                // All modern browsers to register DOMContentLoaded
+                document.addEventListener('DOMContentLoaded', callbackFunc);
+            } else {
+                // Old IE browsers
+                document.attachEvent('onreadystatechange', function() {
+                if (document.readyState === 'complete') {
+                    callbackFunc();
+                }
+                });
+            }
+            }
+    
+            ready(function() {
+
+                //var video = document.getElementById('fantasy-video');
+                //video.play();
+
+                const el = document.querySelector("#playvideo");
+
+                if (document.URL.indexOf("techno-schuppen") > -1) {  
+                
+                    console.log("BULA")
+                    
+                    let isResizing = false;
+        
+                    el.addEventListener("mousedown", mousedown);
+        
+                    function mousedown(e) {
+                    window.addEventListener("mousemove", mousemove);
+                    window.addEventListener("mouseup", mouseup);
+        
+                    let prevX = e.clientX;
+                    let prevY = e.clientY;
+        
+                    function mousemove(e) {
+                        if (!isResizing) {
+                        let newX = prevX - e.clientX;
+                        let newY = prevY - e.clientY;
+        
+                        const rect = el.getBoundingClientRect();
+        
+                        el.style.left = rect.left - newX + "px";
+                        el.style.top = rect.top - newY + "px";
+        
+                        prevX = e.clientX;
+                        prevY = e.clientY;
+                        }
+                    }
+        
+                    function mouseup() {
+                        window.removeEventListener("mousemove", mousemove);
+                        window.removeEventListener("mouseup", mouseup);
+                    }
+                    }
+        
+                    const resizers = document.querySelectorAll(".resizer");
+                    let currentResizer;
+        
+                    for (let resizer of resizers) {
+                    resizer.addEventListener("mousedown", mousedown);
+        
+                    function mousedown(e) {
+                        currentResizer = e.target;
+                        isResizing = true;
+        
+                        let prevX = e.clientX;
+                        let prevY = e.clientY;
+        
+                        window.addEventListener("mousemove", mousemove);
+                        window.addEventListener("mouseup", mouseup);
+        
+                        function mousemove(e) {
+                        const rect = el.getBoundingClientRect();
+        
+                        if (currentResizer.classList.contains("se")) {
+                            el.style.width = rect.width - (prevX - e.clientX) + "px";
+                            el.style.height = rect.height - (prevY - e.clientY) + "px";
+                        } else if (currentResizer.classList.contains("sw")) {
+                            el.style.width = rect.width + (prevX - e.clientX) + "px";
+                            el.style.height = rect.height - (prevY - e.clientY) + "px";
+                            el.style.left = rect.left - (prevX - e.clientX) + "px";
+                        } else if (currentResizer.classList.contains("ne")) {
+                            el.style.width = rect.width - (prevX - e.clientX) + "px";
+                            el.style.height = rect.height + (prevY - e.clientY) + "px";
+                            el.style.top = rect.top - (prevY - e.clientY) + "px";
+                        } else {
+                            el.style.width = rect.width + (prevX - e.clientX) + "px";
+                            el.style.height = rect.height + (prevY - e.clientY) + "px";
+                            el.style.top = rect.top - (prevY - e.clientY) + "px";
+                            el.style.left = rect.left - (prevX - e.clientX) + "px";
+                        }
+        
+                        prevX = e.clientX;
+                        prevY = e.clientY;
+                        }
+        
+                        function mouseup() {
+                        window.removeEventListener("mousemove", mousemove);
+                        window.removeEventListener("mouseup", mouseup);
+                        isResizing = false;
+                        }
+                    }
+                    }
+                } else {
+                    el.style.display = "none";
+                }
+            // your code here
+            });
+    
+                
+    
+            </script>
 
     </body>
 </html>

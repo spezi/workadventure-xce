@@ -1,6 +1,5 @@
 import { Subject } from "rxjs";
-import type * as tg from "generic-type-guard";
-import { ChatEvent, isChatEvent } from "./Events/ChatEvent";
+import { isChatEvent } from "./Events/ChatEvent";
 import { HtmlUtils } from "../WebRtc/HtmlUtils";
 import type { EnterLeaveEvent } from "./Events/EnterLeaveEvent";
 import { isOpenPopupEvent, OpenPopupEvent } from "./Events/OpenPopupEvent";
@@ -8,18 +7,15 @@ import { isOpenTabEvent, OpenTabEvent } from "./Events/OpenTabEvent";
 import type { ButtonClickedEvent } from "./Events/ButtonClickedEvent";
 import { ClosePopupEvent, isClosePopupEvent } from "./Events/ClosePopupEvent";
 import { scriptUtils } from "./ScriptUtils";
-import { GoToPageEvent, isGoToPageEvent } from "./Events/GoToPageEvent";
-import { isOpenCoWebsite, OpenCoWebSiteEvent } from "./Events/OpenCoWebSiteEvent";
+import { isGoToPageEvent } from "./Events/GoToPageEvent";
+import { isCloseCoWebsite, CloseCoWebsiteEvent } from "./Events/CloseCoWebsiteEvent";
 import {
     IframeErrorAnswerEvent,
-    IframeEvent,
-    IframeEventMap,
     IframeQueryMap,
     IframeResponseEvent,
     IframeResponseEventMap,
     isIframeEventWrapper,
     isIframeQueryWrapper,
-    TypedMessageEvent,
 } from "./Events/IframeEvent";
 import type { UserInputChatEvent } from "./Events/UserInputChatEvent";
 import { isPlaySoundEvent, PlaySoundEvent } from "./Events/PlaySoundEvent";
@@ -33,8 +29,10 @@ import { isMenuRegisterEvent, isUnregisterMenuEvent } from "./Events/ui/MenuRegi
 import { SetTilesEvent, isSetTilesEvent } from "./Events/SetTilesEvent";
 import type { SetVariableEvent } from "./Events/SetVariableEvent";
 import { ModifyEmbeddedWebsiteEvent, isEmbeddedWebsiteEvent } from "./Events/EmbeddedWebsiteEvent";
-import { EmbeddedWebsite } from "./iframe/Room/EmbeddedWebsite";
 import { handleMenuRegistrationEvent, handleMenuUnregisterEvent } from "../Stores/MenuStore";
+import type { ChangeLayerEvent } from "./Events/ChangeLayerEvent";
+import type { WasCameraUpdatedEvent } from "./Events/WasCameraUpdatedEvent";
+import type { ChangeZoneEvent } from "./Events/ChangeZoneEvent";
 
 type AnswererCallback<T extends keyof IframeQueryMap> = (
     query: IframeQueryMap[T]["query"],
@@ -54,9 +52,6 @@ class IframeListener {
 
     private readonly _loadPageStream: Subject<string> = new Subject();
     public readonly loadPageStream = this._loadPageStream.asObservable();
-
-    private readonly _openCoWebSiteStream: Subject<OpenCoWebSiteEvent> = new Subject();
-    public readonly openCoWebSiteStream = this._openCoWebSiteStream.asObservable();
 
     private readonly _disablePlayerControlStream: Subject<void> = new Subject();
     public readonly disablePlayerControlStream = this._disablePlayerControlStream.asObservable();
@@ -90,6 +85,9 @@ class IframeListener {
 
     private readonly _loadSoundStream: Subject<LoadSoundEvent> = new Subject();
     public readonly loadSoundStream = this._loadSoundStream.asObservable();
+
+    private readonly _trackCameraUpdateStream: Subject<LoadSoundEvent> = new Subject();
+    public readonly trackCameraUpdateStream = this._trackCameraUpdateStream.asObservable();
 
     private readonly _setTilesStream: Subject<SetTilesEvent> = new Subject();
     public readonly setTilesStream = this._setTilesStream.asObservable();
@@ -137,8 +135,6 @@ class IframeListener {
                     }
                     return;
                 }
-
-                foundSrc = this.getBaseUrl(foundSrc, message.source);
 
                 if (isIframeQueryWrapper(payload)) {
                     const queryId = payload.id;
@@ -224,15 +220,6 @@ class IframeListener {
                         this._stopSoundStream.next(payload.data);
                     } else if (payload.type === "loadSound" && isLoadSoundEvent(payload.data)) {
                         this._loadSoundStream.next(payload.data);
-                    } else if (payload.type === "openCoWebSite" && isOpenCoWebsite(payload.data)) {
-                        scriptUtils.openCoWebsite(
-                            payload.data.url,
-                            foundSrc,
-                            payload.data.allowApi,
-                            payload.data.allowPolicy
-                        );
-                    } else if (payload.type === "closeCoWebSite") {
-                        scriptUtils.closeCoWebSite();
                     } else if (payload.type === "disablePlayerControls") {
                         this._disablePlayerControlStream.next();
                     } else if (payload.type === "restorePlayerControls") {
@@ -243,6 +230,8 @@ class IframeListener {
                         this._removeBubbleStream.next();
                     } else if (payload.type == "onPlayerMove") {
                         this.sendPlayerMove = true;
+                    } else if (payload.type == "onCameraUpdate") {
+                        this._trackCameraUpdateStream.next();
                     } else if (payload.type == "setTiles" && isSetTilesEvent(payload.data)) {
                         this._setTilesStream.next(payload.data);
                     } else if (payload.type == "modifyEmbeddedWebsite" && isEmbeddedWebsiteEvent(payload.data)) {
@@ -252,6 +241,9 @@ class IframeListener {
                         this.iframeCloseCallbacks.get(iframe)?.push(() => {
                             handleMenuUnregisterEvent(dataName);
                         });
+
+                        foundSrc = this.getBaseUrl(foundSrc, message.source);
+
                         handleMenuRegistrationEvent(
                             payload.data.name,
                             payload.data.iframe,
@@ -284,7 +276,7 @@ class IframeListener {
 
     registerScript(scriptUrl: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            console.log("Loading map related script at ", scriptUrl);
+            console.info("Loading map related script at ", scriptUrl);
 
             if (!process.env.NODE_ENV || process.env.NODE_ENV === "development") {
                 // Using external iframe mode (
@@ -326,7 +318,7 @@ class IframeListener {
                     "//" +
                     window.location.host +
                     '/iframe_api.js" ></script>\n' +
-                    '<script src="' +
+                    '<script type="module" src="' +
                     scriptUrl +
                     '" ></script>\n' +
                     "<title></title>\n" +
@@ -352,6 +344,20 @@ class IframeListener {
             }
         }
         return src;
+    }
+
+    public getBaseUrlFromSource(source: MessageEventSource): string {
+        let foundSrc: string | undefined;
+        let iframe: HTMLIFrameElement | undefined;
+
+        for (iframe of this.iframes) {
+            if (iframe.contentWindow === source) {
+                foundSrc = iframe.src;
+                break;
+            }
+        }
+
+        return this.getBaseUrl(foundSrc ?? "", source);
     }
 
     private static getIFrameId(scriptUrl: string): string {
@@ -397,6 +403,42 @@ class IframeListener {
         });
     }
 
+    sendEnterLayerEvent(layerName: string) {
+        this.postMessage({
+            type: "enterLayerEvent",
+            data: {
+                name: layerName,
+            } as ChangeLayerEvent,
+        });
+    }
+
+    sendLeaveLayerEvent(layerName: string) {
+        this.postMessage({
+            type: "leaveLayerEvent",
+            data: {
+                name: layerName,
+            } as ChangeLayerEvent,
+        });
+    }
+
+    sendEnterZoneEvent(zoneName: string) {
+        this.postMessage({
+            type: "enterZoneEvent",
+            data: {
+                name: zoneName,
+            } as ChangeZoneEvent,
+        });
+    }
+
+    sendLeaveZoneEvent(zoneName: string) {
+        this.postMessage({
+            type: "leaveZoneEvent",
+            data: {
+                name: zoneName,
+            } as ChangeZoneEvent,
+        });
+    }
+
     hasPlayerMoved(event: HasPlayerMovedEvent) {
         if (this.sendPlayerMove) {
             this.postMessage({
@@ -404,6 +446,13 @@ class IframeListener {
                 data: event,
             });
         }
+    }
+
+    sendCameraUpdated(event: WasCameraUpdatedEvent) {
+        this.postMessage({
+            type: "wasCameraUpdated",
+            data: event,
+        });
     }
 
     sendButtonClickedEvent(popupId: number, buttonId: number): void {
