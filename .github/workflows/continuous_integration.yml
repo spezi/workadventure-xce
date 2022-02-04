@@ -36,7 +36,7 @@ jobs:
         working-directory: "messages"
 
       - name: "Build proto messages"
-        run: yarn run proto && yarn run copy-to-front
+        run: yarn run ts-proto && yarn run copy-to-front-ts-proto && yarn run json-copy-to-front
         working-directory: "messages"
 
       - name: "Create index.html"
@@ -59,17 +59,12 @@ jobs:
         working-directory: "front"
 
       - name: "Pretty"
-        run: yarn run pretty
+        run: yarn run pretty-check
         working-directory: "front"
 
       - name: "Jasmine"
         run: yarn test
         working-directory: "front"
-
- # We will enable prettier checks on front in a few month, when most PRs without prettier have been merged
- #     - name: "Prettier"
- #       run: yarn run pretty-check
- #       working-directory: "front"
 
   continuous-integration-pusher:
     name: "Continuous Integration Pusher"
@@ -99,7 +94,7 @@ jobs:
         working-directory: "messages"
 
       - name: "Build proto messages"
-        run: yarn run proto && yarn run copy-to-pusher
+        run: yarn run proto && yarn run copy-to-pusher && yarn run json-copy-to-pusher
         working-directory: "messages"
 
       - name: "Build"
