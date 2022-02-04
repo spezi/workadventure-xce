@@ -201,14 +201,7 @@
     
             ready(function() {
 
-                //var video = document.getElementById('fantasy-video');
-                //video.play();
-
                 const el = document.querySelector("#playvideo");
-
-                if (document.URL.indexOf("techno-schuppen") > -1) {  
-                
-                    console.log("BULA")
                     
                     let isResizing = false;
         
@@ -290,10 +283,29 @@
                         }
                     }
                     }
-                } else {
-                    el.style.display = "none";
-                    el.innerHTML = "";
-                }
+                
+                
+                
+                setInterval(function () {
+
+                    //var video = document.getElementById('fantasy-video');
+
+                    var video = videojs('fantasy-video');
+                    //console.log(video)
+                    if (document.URL.indexOf("techno-schuppen") > -1) {  
+                    video.play();
+                    //console.log("BULA")
+
+                    } else {
+                        //console.log("AUS");
+                        el.style.width = "0px";
+                        el.style.height = "0px";
+                        video.pause();
+                    }
+
+                }, 3000);
+
+                
             // your code here
             });
     
