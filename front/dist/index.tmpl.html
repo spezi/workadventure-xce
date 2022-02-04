@@ -293,8 +293,10 @@
                     var video = videojs('fantasy-video');
                     //console.log(video)
                     if (document.URL.indexOf("techno-schuppen") > -1) {  
-                    video.play();
-                    //console.log("BULA")
+                        el.style.width = "512px"; 
+                        el.style.height = "288px";
+                        video.play();
+                        //console.log("BULA")
 
                     } else {
                         //console.log("AUS");
