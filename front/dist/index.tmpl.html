@@ -300,7 +300,6 @@
                         el.style.height = "288px";
                         if(!playing) {
                             playing = true;
-                            video.load();
                             video.play();
                         }
                         
@@ -310,7 +309,7 @@
                         //console.log("AUS");
                         el.style.width = "0px";
                         el.style.height = "0px";
-                        video.dispose();
+                        video.pause();
                         playing = false;
                        
                     }
