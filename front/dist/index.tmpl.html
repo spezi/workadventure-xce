@@ -300,19 +300,18 @@
                         el.style.height = "288px";
                         if(!playing) {
                             playing = true;
+                            video.load();
                             video.play();
                         }
                         
-                        //console.log("BULA")
+                        console.log(playing)
 
                     } else {
                         //console.log("AUS");
                         el.style.width = "0px";
                         el.style.height = "0px";
-                        if(!playing) {
-                            playing = false;
-                            video.pause();
-                        }
+                        video.dispose();
+                        playing = false;
                        
                     }
 
